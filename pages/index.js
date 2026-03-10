@@ -13,8 +13,13 @@ async function callClaude(prompt, system, useWebSearch = false) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, system, useWebSearch }),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API 오류 (${res.status})`);
+  }
   const data = await res.json();
-  return data.text || "";
+  if (!data.text) throw new Error("빈 응답");
+  return data.text;
 }
 
 function parseJSON(text) {
@@ -53,11 +58,13 @@ function NewsPanel({ onUseNews }) {
         "당신은 한국 의료 뉴스 큐레이터입니다. 웹 검색으로 오늘 날짜의 최신 의료 뉴스를 찾아 JSON으로만 응답합니다.", true);
       const clean = text.replace(/```json|```/g, "").trim();
       const s = clean.indexOf("["), e = clean.lastIndexOf("]");
+      if (s === -1 || e === -1) throw new Error("뉴스 JSON 파싱 실패");
       const parsed = JSON.parse(clean.slice(s, e + 1));
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("뉴스 데이터 없음");
       setNews(parsed);
       setLastFetched(today());
       localStorage.setItem("news_cache", JSON.stringify({ date: today(), items: parsed }));
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); alert("뉴스를 가져오는 중 오류가 발생했습니다: " + e.message); }
     setLoading(false);
   };
 
@@ -299,7 +306,7 @@ export default function App() {
 
             {showAiPanel && (
               <div style={{ background: "#1a1a2e", border: "1px solid #3d3880", borderRadius: 10, padding: 14, marginBottom: 12 }}>
-                <div style={{ fontSize: 12, color: "#aaa", marginBottom: 7 }}>주제를 입력하면 AI가 세션별 초안을 작성합니다</div>
+                <div style={{ fontSize: 12, color: "#aaa", marginBottom: 7 }}>주제를 입력하면 AI가 섹션별 초안을 작성합니다</div>
                 <div style={{ display: "flex", gap: 7 }}>
                   <input value={aiTopic} onChange={e => setAiTopic(e.target.value)} onKeyDown={e => e.key === "Enter" && generateDraft()}
                     placeholder="예) 하지정맥류 방치하면 생기는 일 5가지"
